@@ -6,6 +6,49 @@ import os
 import yaml
 from flask import send_from_directory, redirect
 from flask_cors import CORS
+from flask_firebase import FirebaseAuth
+
+class Account(UserMixin, db.Model):
+    __tablename__ = 'accounts'
+
+    account_id = db.Column(db.Integer, primary_key=True)
+    firebase_user_id =  db.Column(db.Text, unique=True)
+    email = db.Column(db.Text, unique=True, nullable=False)
+    email_verified = db.Column(db.Boolean, default=False, nullable=False)
+    name = db.Column(db.Text)
+
+@auth.production_loader
+def production_sign_in(token):
+    account = Account.query.filter_by(firebase_user_id=token['sub']).one_or_none()
+    if account is None:
+        account = Account(firbase_user_id=token['sub'])
+        db.session.add(account)
+
+    account.email = token['email']
+    account.email_verified = token['email_verified']
+    account.name = token.get('name')
+    account.photo_url = token.get('picture')
+    db.session.flush()
+    login_user(account)
+    db.session.commit()
+
+@auth.development_loader
+def development_sign_in(email):
+    login_user(Account.query.filter_by(email=email).one())
+
+@auth.unloader
+def sign_out():
+    logout_user()
+
+@login_manager.user_loader
+def load_user(account_id):
+    return Account.query.get(account_id)
+
+@login_manager.unauthorized_handler
+def authentication_required():
+    return auth.url_for('widget', mode='select', next=request.url)
+
+
 
 # from backend.Project import Project # TODO !!
 from backend import AVAILABLE_MODELS
@@ -31,6 +74,8 @@ def get_all_projects():
     return res
 
 ##def copylinks
+def firebase():
+
 
 def analyze(analyze_request):
     project = analyze_request.get('project')
@@ -56,6 +101,10 @@ def analyze(analyze_request):
 def redir():
 
     return redirect('client/fun.html')
+
+# @app.route('/')
+# def redir():
+#     return redirect('client/landing.html')
 
 
 @app.route('/client/<path:path>')
